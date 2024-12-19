@@ -23,6 +23,8 @@ struct AllowlistStage {
 }
 
 struct SetupConfig {
+    /// @dev The token ID of the token.
+    uint256 tokenId;
     /// @dev The maximum number of tokens that can be minted.
     ///      - Can be decreased if current supply < new max supply
     ///      - Cannot be increased once set
@@ -40,4 +42,8 @@ struct SetupConfig {
     AllowlistStage allowlistStage;
     /// @dev The payout recipient of the token.
     address payoutRecipient;
+    /// @dev The royalty recipient of the token.
+    address royaltyRecipient;
+    /// @dev The royalty basis points of the token.
+    uint96 royaltyBps;
 }
