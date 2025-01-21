@@ -11,8 +11,6 @@ interface ContractDeployer {
         external
         view
         returns (address newAddress);
-
-    function create2(bytes32 _salt, bytes32 _bytecodeHash, bytes calldata _input) external payable returns (address);
 }
 
 /// @title MagicDropCloneFactory
@@ -38,7 +36,6 @@ contract MagicDropCloneFactory is Ownable {
     =                             ERRORS                           =
     ==============================================================*/
 
-    error InitializationFailed();
     error RegistryAddressCannotBeZero();
     error InsufficientDeploymentFee();
     error WithdrawalFailed();
@@ -85,12 +82,7 @@ contract MagicDropCloneFactory is Ownable {
             revert InsufficientDeploymentFee();
         }
 
-        bytes memory bytecode = type(ZKProxy).creationCode;
-        bytes memory constructorArgs = abi.encode(implementation);
-        bytes memory deploymentBytecode = bytes.concat(bytecode, constructorArgs);
-
-        address instance =
-            ContractDeployer(CONTRACT_DEPLOYER).create2(salt, keccak256(deploymentBytecode), constructorArgs);
+        address instance = new ZKProxy{salt: salt}(implementation);
 
         ERC721MagicDropCloneable(instance).initialize(name, symbol, initialOwner);
 
