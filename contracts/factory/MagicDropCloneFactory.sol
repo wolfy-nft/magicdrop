@@ -146,9 +146,21 @@ contract MagicDropCloneFactory is Ownable {
         bytes memory constructorArgs = abi.encode(implementation);
         bytes memory deploymentBytecode = bytes.concat(bytecode, constructorArgs);
 
-        return ContractDeployer(CONTRACT_DEPLOYER).getNewAddressCreate2(
-            address(this), keccak256(deploymentBytecode), salt, constructorArgs
+        (bool success, bytes memory result) = CONTRACT_DEPLOYER.staticcall(
+            abi.encodeWithSignature(
+                "getNewAddressCreate2(address,bytes32,bytes32,bytes)",
+                address(this),
+                keccak256(deploymentBytecode),
+                salt,
+                constructorArgs
+            )
         );
+
+        if (!success) {
+            revert("Failed to predict deployment address");
+        }
+
+        return abi.decode(result, (address));
     }
 
     /*==============================================================

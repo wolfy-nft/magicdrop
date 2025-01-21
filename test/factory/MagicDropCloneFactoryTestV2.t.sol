@@ -41,6 +41,12 @@ contract MagicDropCloneFactoryTestV2 is Test {
         vm.assertEq(ERC721MagicDropCloneable(contractAddress).owner(), user);
     }
 
+    function testPredictDeploymentAddress() public {
+        bytes32 salt = bytes32(uint256(0));
+        address contractAddress = factory.predictDeploymentAddress(salt);
+        vm.assertEq(contractAddress, contractAddress);
+    }
+
     function testFailWithdrawToNonOwner() public {
         vm.startPrank(user);
         vm.expectRevert("Unauthorized()");
