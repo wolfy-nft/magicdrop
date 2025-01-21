@@ -4,6 +4,7 @@ pragma solidity ^0.8.22;
 import {console} from "forge-std/console.sol";
 import {Test} from "forge-std/Test.sol";
 import {MagicDropCloneFactory} from "../../contracts/factory/MagicDropCloneFactory.sol";
+import {TokenStandard} from "../../contracts/common/Structs.sol";
 
 contract MagicDropCloneFactoryTest is Test {
     MagicDropCloneFactory internal factory;

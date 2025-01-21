@@ -82,12 +82,11 @@ contract MagicDropCloneFactory is Ownable {
             revert InsufficientDeploymentFee();
         }
 
-        address instance = new ZKProxy{salt: salt}(implementation);
-
-        ERC721MagicDropCloneable(instance).initialize(name, symbol, initialOwner);
+        ERC721MagicDropCloneable instance = ERC721MagicDropCloneable(address(new ZKProxy{salt: salt}(implementation)));
+        instance.initialize(name, symbol, initialOwner);
 
         emit NewContractInitialized({
-            contractAddress: instance,
+            contractAddress: address(instance),
             initialOwner: initialOwner,
             implId: implId,
             standard: standard,
@@ -95,7 +94,7 @@ contract MagicDropCloneFactory is Ownable {
             symbol: symbol
         });
 
-        return instance;
+        return address(instance);
     }
 
     /// @notice Creates a new clone of a MagicDrop contract
@@ -120,11 +119,11 @@ contract MagicDropCloneFactory is Ownable {
             revert InsufficientDeploymentFee();
         }
 
-        address instance = address(new ZKProxy(implementation));
-        ERC721MagicDropCloneable(instance).initialize(name, symbol, initialOwner);
+        ERC721MagicDropCloneable instance = ERC721MagicDropCloneable(address(new ZKProxy(implementation)));
+        instance.initialize(name, symbol, initialOwner);
 
         emit NewContractInitialized({
-            contractAddress: instance,
+            contractAddress: address(instance),
             initialOwner: initialOwner,
             implId: implId,
             standard: standard,
@@ -132,7 +131,7 @@ contract MagicDropCloneFactory is Ownable {
             symbol: symbol
         });
 
-        return instance;
+        return address(instance);
     }
 
     /*==============================================================
