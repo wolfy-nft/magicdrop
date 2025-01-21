@@ -5,8 +5,9 @@ import {console} from "forge-std/console.sol";
 import {Test} from "forge-std/Test.sol";
 import {MagicDropCloneFactory} from "../../contracts/factory/MagicDropCloneFactory.sol";
 import {TokenStandard} from "../../contracts/common/Structs.sol";
+import {ERC721MagicDropCloneable} from "../../contracts/nft/erc721m/clones/ERC721MagicDropCloneable.sol";
 
-contract MagicDropCloneFactoryTest is Test {
+contract MagicDropCloneFactoryTestV2 is Test {
     MagicDropCloneFactory internal factory;
 
     address internal owner = payable(address(0x1));
@@ -24,11 +25,25 @@ contract MagicDropCloneFactoryTest is Test {
 
     function testCreateContract() public {
         vm.startPrank(user);
-        factory.createContract("TestNFT", "TNFT", TokenStandard.ERC721, payable(user), 0);
+        address contractAddress = factory.createContract("TestNFT", "TNFT", TokenStandard.ERC721, payable(user), 0);
+        vm.stopPrank();
+
+        vm.assertEq(ERC721MagicDropCloneable(contractAddress).owner(), user);
+    }
+
+    function testCreateContractDeterministic() public {
+        vm.startPrank(user);
+        bytes32 salt = bytes32(uint256(0));
+        address contractAddress =
+            factory.createContractDeterministic("TestNFT", "TNFT", TokenStandard.ERC721, payable(user), 0, salt);
+        vm.stopPrank();
+
+        vm.assertEq(ERC721MagicDropCloneable(contractAddress).owner(), user);
     }
 
     function testFailWithdrawToNonOwner() public {
         vm.startPrank(user);
+        vm.expectRevert("Unauthorized()");
         factory.withdraw(user);
     }
 }
