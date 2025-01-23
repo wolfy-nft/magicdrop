@@ -138,6 +138,15 @@ contract MagicDropCloneFactory is Ownable {
     =                      PUBLIC VIEW METHODS                     =
     ==============================================================*/
 
+
+    /// @notice Calculates the address of a deployed contract via create2
+    /// @param _sender The account that deploys the contract.
+    /// @param _bytecodeHash The correctly formatted hash of the bytecode.
+    /// @param _salt The create2 salt.
+    /// @param _input The constructor data.
+    /// @return newAddress The derived address of the account.
+
+
     /// @notice Predicts the deployment address of a proxy contract
     /// @param salt The salt used for address generation
     /// @return The predicted proxy deployment address
@@ -146,21 +155,26 @@ contract MagicDropCloneFactory is Ownable {
         bytes memory constructorArgs = abi.encode(implementation);
         bytes memory deploymentBytecode = bytes.concat(bytecode, constructorArgs);
 
-        (bool success, bytes memory result) = CONTRACT_DEPLOYER.staticcall(
-            abi.encodeWithSignature(
-                "getNewAddressCreate2(address,bytes32,bytes32,bytes)",
-                address(this),
-                keccak256(deploymentBytecode),
-                salt,
-                constructorArgs
-            )
-        );
+        // (bool success, bytes memory result) = CONTRACT_DEPLOYER.staticcall(
+        //     abi.encodeWithSignature(
+        //         "getNewAddressCreate2(address,bytes32,bytes32,bytes)",
+        //         address(this),
+        //         keccak256(deploymentBytecode),
+        //         salt,
+        //         constructorArgs
+        //     )
+        // );
 
-        if (!success) {
-            revert("Failed to predict deployment address");
-        }
+        ContractDeployer deployer = ContractDeployer(CONTRACT_DEPLOYER);
+        address predictedAddress =
+            deployer.getNewAddressCreate2(address(this), keccak256(deploymentBytecode), salt, deploymentBytecode);
 
-        return abi.decode(result, (address));
+        // if (!success) {
+        //     revert("Failed to predict deployment address");
+        // }
+
+        // return abi.decode(result, (address));
+        return predictedAddress;
     }
 
     /*==============================================================
