@@ -8,6 +8,9 @@ solc_version = "0.8.22"
 evm_version = "cancun"
 via_ir = true
 optimizer_runs = 777
+fallback_oz = true
+is_system = true # Note: NonceHolder and the ContractDeployer system contracts can only be called with a special isSystem flag as true
+mode = "3"
 
 [etherscan]
 apechain = {key = "${VERIFICATION_API_KEY_APECHAIN}", chain = 33139, url = "https://api.apescan.io/api"}

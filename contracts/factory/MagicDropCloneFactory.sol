@@ -1,22 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import {UUPSUpgradeable} from "solady/src/utils/UUPSUpgradeable.sol";
 import {Ownable} from "solady/src/auth/Ownable.sol";
-import {LibClone} from "solady/src/utils/LibClone.sol";
 import {TokenStandard} from "../common/Structs.sol";
-import {MagicDropTokenImplRegistry} from "../registry/MagicDropTokenImplRegistry.sol";
+import {ERC721MagicDropCloneable} from "../nft/erc721m/clones/ERC721MagicDropCloneable.sol";
+import {ZKProxy} from "../common/ZKProxy.sol";
+
+interface ContractDeployer {
+    function getNewAddressCreate2(address _sender, bytes32 _bytecodeHash, bytes32 _salt, bytes calldata _input)
+        external
+        view
+        returns (address newAddress);
+}
 
 /// @title MagicDropCloneFactory
 /// @notice A factory contract for creating and managing clones of MagicDrop contracts
 /// @dev This contract uses the UUPS proxy pattern
-contract MagicDropCloneFactory is Ownable, UUPSUpgradeable {
-    /*==============================================================
-    =                           CONSTANTS                          =
-    ==============================================================*/
+contract MagicDropCloneFactory is Ownable {
+    address public immutable implementation;
+    uint256 public deploymentFee;
 
-    MagicDropTokenImplRegistry private _registry;
-    bytes4 private constant INITIALIZE_SELECTOR = bytes4(keccak256("initialize(string,string,address)"));
+    address public constant CONTRACT_DEPLOYER = 0x0000000000000000000000000000000000008006;
 
     /*==============================================================
     =                             EVENTS                           =
@@ -32,7 +36,6 @@ contract MagicDropCloneFactory is Ownable, UUPSUpgradeable {
     =                             ERRORS                           =
     ==============================================================*/
 
-    error InitializationFailed();
     error RegistryAddressCannotBeZero();
     error InsufficientDeploymentFee();
     error WithdrawalFailed();
@@ -43,16 +46,12 @@ contract MagicDropCloneFactory is Ownable, UUPSUpgradeable {
     ==============================================================*/
 
     /// @param initialOwner The address of the initial owner
-    /// @param registry The address of the registry contract
-    constructor(address initialOwner, address registry) public {
-        if (registry == address(0)) {
-            revert RegistryAddressCannotBeZero();
-        }
-
-        _registry = MagicDropTokenImplRegistry(registry);
+    constructor(address initialOwner) {
         _initializeOwner(initialOwner);
 
         emit MagicDropFactoryInitialized();
+
+        implementation = address(new ERC721MagicDropCloneable());
     }
 
     /*==============================================================
@@ -75,35 +74,19 @@ contract MagicDropCloneFactory is Ownable, UUPSUpgradeable {
         uint32 implId,
         bytes32 salt
     ) external payable returns (address) {
-        address impl;
-        // Retrieve the implementation address from the registry
-        if (implId == 0) {
-            impl = _registry.getDefaultImplementation(standard);
-        } else {
-            impl = _registry.getImplementation(standard, implId);
-        }
-
         if (initialOwner == address(0)) {
             revert InitialOwnerCannotBeZero();
         }
 
-        // Retrieve the deployment fee for the implementation and ensure the caller has sent the correct amount
-        uint256 deploymentFee = _registry.getDeploymentFee(standard, implId);
-        if (msg.value < deploymentFee) {
+        if (msg.value != deploymentFee) {
             revert InsufficientDeploymentFee();
         }
 
-        // Create a deterministic clone of the implementation contract
-        address instance = LibClone.cloneDeterministic(impl, salt);
-
-        // Initialize the newly created contract
-        (bool success,) = instance.call(abi.encodeWithSelector(INITIALIZE_SELECTOR, name, symbol, initialOwner));
-        if (!success) {
-            revert InitializationFailed();
-        }
+        ERC721MagicDropCloneable instance = ERC721MagicDropCloneable(address(new ZKProxy{salt: salt}(implementation)));
+        instance.initialize(name, symbol, initialOwner);
 
         emit NewContractInitialized({
-            contractAddress: instance,
+            contractAddress: address(instance),
             initialOwner: initialOwner,
             implId: implId,
             standard: standard,
@@ -111,7 +94,7 @@ contract MagicDropCloneFactory is Ownable, UUPSUpgradeable {
             symbol: symbol
         });
 
-        return instance;
+        return address(instance);
     }
 
     /// @notice Creates a new clone of a MagicDrop contract
@@ -128,35 +111,19 @@ contract MagicDropCloneFactory is Ownable, UUPSUpgradeable {
         address payable initialOwner,
         uint32 implId
     ) external payable returns (address) {
-        address impl;
-        // Retrieve the implementation address from the registry
-        if (implId == 0) {
-            impl = _registry.getDefaultImplementation(standard);
-        } else {
-            impl = _registry.getImplementation(standard, implId);
-        }
-
         if (initialOwner == address(0)) {
             revert InitialOwnerCannotBeZero();
         }
 
-        // Retrieve the deployment fee for the implementation and ensure the caller has sent the correct amount
-        uint256 deploymentFee = _registry.getDeploymentFee(standard, implId);
-        if (msg.value < deploymentFee) {
+        if (msg.value != deploymentFee) {
             revert InsufficientDeploymentFee();
         }
 
-        // Create a non-deterministic clone of the implementation contract
-        address instance = LibClone.clone(impl);
-
-        // Initialize the newly created contract
-        (bool success,) = instance.call(abi.encodeWithSelector(INITIALIZE_SELECTOR, name, symbol, initialOwner));
-        if (!success) {
-            revert InitializationFailed();
-        }
+        ERC721MagicDropCloneable instance = ERC721MagicDropCloneable(address(new ZKProxy(implementation)));
+        instance.initialize(name, symbol, initialOwner);
 
         emit NewContractInitialized({
-            contractAddress: instance,
+            contractAddress: address(instance),
             initialOwner: initialOwner,
             implId: implId,
             standard: standard,
@@ -164,46 +131,55 @@ contract MagicDropCloneFactory is Ownable, UUPSUpgradeable {
             symbol: symbol
         });
 
-        return instance;
+        return address(instance);
     }
 
     /*==============================================================
     =                      PUBLIC VIEW METHODS                     =
     ==============================================================*/
 
-    /// @notice Predicts the deployment address of a deterministic clone
-    /// @param standard The token standard of the contract
-    /// @param implId The implementation ID
-    /// @param salt The salt used for address generation
-    /// @return The predicted deployment address
-    function predictDeploymentAddress(TokenStandard standard, uint32 implId, bytes32 salt)
-        external
-        view
-        returns (address)
-    {
-        address impl;
-        if (implId == 0) {
-            impl = _registry.getDefaultImplementation(standard);
-        } else {
-            impl = _registry.getImplementation(standard, implId);
-        }
-        return LibClone.predictDeterministicAddress(impl, salt, address(this));
-    }
 
-    /// @notice Retrieves the address of the registry contract
-    /// @return The address of the registry contract
-    function getRegistry() external view returns (address) {
-        return address(_registry);
+    /// @notice Calculates the address of a deployed contract via create2
+    /// @param _sender The account that deploys the contract.
+    /// @param _bytecodeHash The correctly formatted hash of the bytecode.
+    /// @param _salt The create2 salt.
+    /// @param _input The constructor data.
+    /// @return newAddress The derived address of the account.
+
+
+    /// @notice Predicts the deployment address of a proxy contract
+    /// @param salt The salt used for address generation
+    /// @return The predicted proxy deployment address
+    function predictDeploymentAddress(bytes32 salt) external view returns (address) {
+        bytes memory bytecode = type(ZKProxy).creationCode;
+        bytes memory constructorArgs = abi.encode(implementation);
+        bytes memory deploymentBytecode = bytes.concat(bytecode, constructorArgs);
+
+        // (bool success, bytes memory result) = CONTRACT_DEPLOYER.staticcall(
+        //     abi.encodeWithSignature(
+        //         "getNewAddressCreate2(address,bytes32,bytes32,bytes)",
+        //         address(this),
+        //         keccak256(deploymentBytecode),
+        //         salt,
+        //         constructorArgs
+        //     )
+        // );
+
+        ContractDeployer deployer = ContractDeployer(CONTRACT_DEPLOYER);
+        address predictedAddress =
+            deployer.getNewAddressCreate2(address(this), keccak256(deploymentBytecode), salt, deploymentBytecode);
+
+        // if (!success) {
+        //     revert("Failed to predict deployment address");
+        // }
+
+        // return abi.decode(result, (address));
+        return predictedAddress;
     }
 
     /*==============================================================
     =                      ADMIN OPERATIONS                        =
     ==============================================================*/
-
-    ///@dev Internal function to authorize an upgrade.
-    ///@param newImplementation Address of the new implementation.
-    ///@notice Only the contract owner can upgrade the contract.
-    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     /// @notice Withdraws the contract's balance
     function withdraw(address to) external onlyOwner {
